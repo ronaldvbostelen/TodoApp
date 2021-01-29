@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TodoApp.Configuration;
+using TodoApp.DB;
+using TodoApp.DB.Models;
 using TodoApp.DB.Models.DTO.Requests;
 using TodoApp.DB.Models.DTO.Responses;
 
@@ -22,13 +24,17 @@ namespace TodoApp.Controllers
     public class AutManagementController : ControllerBase
     {
         private readonly UserManager<IdentityUser> _userManager;
-
         private readonly JwtConfig _jwtConfig;
-
-        public AutManagementController(UserManager<IdentityUser> userManager, IOptionsMonitor<JwtConfig> optionsMonitor)
+        private readonly TokenValidationParameters _tokenValidationParameters;
+        private readonly TodoContext _dbContext;
+        
+        public AutManagementController(UserManager<IdentityUser> userManager, 
+            IOptionsMonitor<JwtConfig> optionsMonitor, TodoContext context, TokenValidationParameters parameters)
         {
             _userManager = userManager;
             _jwtConfig = optionsMonitor.CurrentValue;
+            _tokenValidationParameters = parameters;
+            _dbContext = context;
         }
 
         [HttpPost("Register")]
@@ -42,26 +48,22 @@ namespace TodoApp.Controllers
                 {
                     return BadRequest(new RegistrationResponse
                     {
-                        Result = false,
+                        Success = false,
                         Errors = new List<string>() {"Email already exist"}
                     });
                 }
 
                 var newUser = new IdentityUser(user.Email) {Email = user.Email};
                 var isCreated = await _userManager.CreateAsync(newUser, user.Password);
+                
                 if (isCreated.Succeeded)
                 {
-                    var jwtToken = GenerateJwt(newUser);
-                    return Ok(new RegistrationResponse()
-                    {
-                        Result = true,
-                        Token = jwtToken
-                    });
+                    return Ok(await GenerateJwtAsync(newUser));
                 }
 
                 return new JsonResult(new RegistrationResponse()
                     {
-                        Result = false,
+                        Success = false,
                         Errors = isCreated.Errors.Select(x => x.Description).ToList()
                     })
                     {StatusCode = 500};
@@ -69,7 +71,7 @@ namespace TodoApp.Controllers
 
             return BadRequest(new RegistrationResponse()
             {
-                Result = false,
+                Success = false,
                 Errors = new List<string>() {"Invalid payload"}
             });
         }
@@ -85,7 +87,7 @@ namespace TodoApp.Controllers
                 {
                     return BadRequest(new RegistrationResponse()
                     {
-                        Result = false,
+                        Success = false,
                         Errors = new List<string>() { "Invalid authentication request"}
                     });
                 }
@@ -94,19 +96,13 @@ namespace TodoApp.Controllers
 
                 if (isCorrect)
                 {
-                    var jwt = GenerateJwt(existingUser);
-
-                    return Ok(new RegistrationResponse()
-                    {
-                        Result = true,
-                        Token = jwt
-                    });
+                    return Ok(await GenerateJwtAsync(existingUser));
                 }
                 else
                 {
                     return BadRequest(new RegistrationResponse()
                     {
-                        Result = false,
+                        Success = false,
                         Errors = new List<string>() {"Invalid authentication request"}
                     });
                 }
@@ -114,17 +110,15 @@ namespace TodoApp.Controllers
 
             return BadRequest(new RegistrationResponse()
             {
-                Result = false,
+                Success = false,
                 Errors = new List<string>() {"Invalid payload"}
             });
         }
 
-        private string GenerateJwt(IdentityUser user)
+        private async Task<AuthResult> GenerateJwtAsync(IdentityUser user)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
-
-            var key = Encoding.ASCII.GetBytes(_jwtConfig.Secret);
-
+            
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
@@ -136,15 +130,47 @@ namespace TodoApp.Controllers
                 }),
                 Issuer = _jwtConfig.Issuer,
                 Audience = _jwtConfig.Audience,
-                Expires = DateTime.UtcNow.AddHours(6),
+                Expires = DateTime.UtcNow.AddSeconds(30),
                 NotBefore = DateTime.UtcNow,
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_jwtConfig.Secret)),
                     SecurityAlgorithms.HmacSha512Signature)
             };
 
             var token = jwtTokenHandler.CreateToken(tokenDescriptor);
             var jwt = jwtTokenHandler.WriteToken(token);
-            return jwt;
+
+            var refreshToken = new RefreshToken()
+            {
+                JwtId = token.Id,
+                UserId = user.Id,
+                AddedDate = DateTime.UtcNow,
+                ExpiryData = DateTime.UtcNow.AddYears(1),
+                Token = RandomString(25) + Guid.NewGuid()
+            };
+
+            await _dbContext.RefreshTokens.AddAsync(refreshToken);
+            await _dbContext.SaveChangesAsync();
+            
+            return new AuthResult()
+            {
+                Token = jwt,
+                Success = true,
+                RefreshToken = refreshToken.Token
+            };
+        }
+
+        private string RandomString(int length)
+        {
+            var rdm = new Random();
+            var rdmChars = new char[length];
+            var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            
+            for (int i = 0; i < length; i++)
+            {
+                rdmChars[i] = chars[rdm.Next(chars.Length)];
+            }
+
+            return new string(rdmChars);
         }
     }
 }

@@ -44,6 +44,20 @@ namespace TodoApp
             });
 
             // JWT
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration["JwtConfig:Secret"])),
+                ValidateIssuer = true,
+                ValidIssuer = Configuration["JwtConfig:Issuer"],
+                ValidateAudience = true,
+                ValidAudience = Configuration["JwtConfig:Audience"],
+                RequireExpirationTime = true,
+                ValidateLifetime = true
+            };
+
+            services.AddSingleton(tokenValidationParameters);
+            
             services.Configure<JwtConfig>(Configuration.GetSection("JwtConfig"));
             
             services.AddAuthentication(options => {
@@ -55,17 +69,7 @@ namespace TodoApp
                 {
                     jwt.RequireHttpsMetadata = false;
                     jwt.SaveToken = true;
-                    jwt.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuerSigningKey = true, 
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration["JwtConfig:Secret"])), 
-                        ValidateIssuer = true,
-                        ValidIssuer = Configuration["JwtConfig:Issuer"],
-                        ValidateAudience = true,
-                        ValidAudience = Configuration["JwtConfig:Audience"],
-                        RequireExpirationTime = true,
-                        ValidateLifetime = true
-                    };
+                    jwt.TokenValidationParameters = tokenValidationParameters;
                 });
 
             services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)

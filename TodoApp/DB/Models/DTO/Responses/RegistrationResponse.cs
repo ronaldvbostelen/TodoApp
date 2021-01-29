@@ -1,8 +1,8 @@
-﻿using TodoApp.Domain;
+﻿using TodoApp.Configuration;
 
 namespace TodoApp.DB.Models.DTO.Responses
 {
-    public class RegistrationResponse : AutResult
+    public class RegistrationResponse : AuthResult
     {
         
     }

@@ -7,6 +7,7 @@ namespace TodoApp.DB
     public class TodoContext : IdentityDbContext
     {
         public DbSet<ItemData> Items { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         public TodoContext()
         {
