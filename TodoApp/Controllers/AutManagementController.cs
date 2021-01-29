@@ -322,13 +322,26 @@ namespace TodoApp.Controllers
 
         private string RandomString(int length)
         {
+            while (length%4 != 0)
+            {
+                length++;
+            }
+            
             var rdm = new Random();
-            var rdmChars = new char[length];
+            var hyphens = length / 4;
+            var rdmChars = new char[length + hyphens];
             var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-            for (int i = 0; i < length; i++)
+            for (int i = 0; i < length + hyphens; i++)
             {
-                rdmChars[i] = chars[rdm.Next(chars.Length)];
+                if ((i + 1) % 5 == 0)
+                {
+                    rdmChars[i] = '-';
+                }
+                else
+                {
+                    rdmChars[i] = chars[rdm.Next(chars.Length)];
+                }
             }
 
             return new string(rdmChars);
