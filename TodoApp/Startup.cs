@@ -53,7 +53,8 @@ namespace TodoApp
                 ValidateAudience = true,
                 ValidAudience = Configuration["JwtConfig:Audience"],
                 RequireExpirationTime = true,
-                ValidateLifetime = true
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
             };
 
             services.AddSingleton(tokenValidationParameters);
